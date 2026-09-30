@@ -268,25 +268,40 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mangohud &>/dev/null \
 # ─────────────────────────────────────────────
 msg_info "Configuring Xorg for gamer user"
 
-# xorg.conf — minimal, uses modesetting + evdev
+# Pin Xorg to the AMD iGPU.
+# On hosts that also have a discrete GPU (e.g. NVIDIA), the firmware may mark
+# the dGPU as boot VGA. With no config Xorg then probes the dGPU, fails with
+# "Failed to open DRM device ... -19" and exits with
+# "Cannot run in framebuffer mode". An explicit BusID fixes it.
+# NOTE: Xorg BusID values are DECIMAL (PCI c8:00.0 -> "PCI:200:0:0").
 mkdir -p /etc/X11/xorg.conf.d
-cat > /etc/X11/xorg.conf.d/00-system.conf << 'XORGEOF'
-Section "ServerLayout"
-    Identifier "Layout"
-    Screen 0 "Screen0" 0 0
-EndSection
-
+IGPU_BUSID=""
+for dev in /sys/class/drm/card*/device; do
+    [ "$(cat "$dev/vendor" 2>/dev/null)" = "0x1002" ] || continue
+    addr=$(basename "$(readlink -f "$dev")")          # e.g. 0000:c8:00.0
+    bus=${addr#*:}; bus=${bus%%:*}
+    slot=${addr##*:}; slot=${slot%%.*}
+    fn=${addr##*.}
+    IGPU_BUSID="PCI:$((16#$bus)):$((16#$slot)):$((16#$fn))"
+    break
+done
+if [ -n "$IGPU_BUSID" ]; then
+    cat > /etc/X11/xorg.conf.d/20-igpu.conf << XORGEOF
 Section "Device"
-    Identifier "Card0"
-    Driver "modesetting"
-    BusID "auto"
-EndSection
-
-Section "Screen"
-    Identifier "Screen0"
-    Device "Card0"
+    Identifier "iGPU"
+    Driver "amdgpu"
+    BusID "$IGPU_BUSID"
 EndSection
 XORGEOF
+    msg_ok "Xorg pinned to AMD iGPU ($IGPU_BUSID)"
+else
+    msg_error "No AMD DRM device found; Xorg left on autodetect"
+fi
+
+# steam-installer asks for confirmation through zenity on first run, which
+# blocks an unattended autostart. Stub it out so the bootstrap proceeds.
+printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/zenity
+chmod 755 /usr/local/bin/zenity
 
 # ─────────────────────────────────────────────
 # 11. .xinitrc — gamescope launches steam -gamepadui

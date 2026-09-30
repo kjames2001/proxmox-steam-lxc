@@ -41,3 +41,35 @@ No XFCE. No lightdm. No session manager. Just Gamescope + Steam.
 - Requires `trixie-backports` repo for gamescope package
 - AMD iGPU shared via bind-mounts; only one container owns the physical display
 - For Xorg on TTY7 in unprivileged containers, may need `chmod 660 /dev/tty7` on host
+
+## Troubleshooting
+
+### Xorg: "Cannot run in framebuffer mode" / "Failed to open DRM device for pci:... -19"
+
+On hosts with both an AMD iGPU and a discrete GPU, the firmware may select the
+dGPU as the boot VGA device (`dmesg | grep "setting as boot VGA"`). Xorg then
+probes the dGPU and gives up. Pin Xorg to the iGPU inside the container:
+
+```
+# /etc/X11/xorg.conf.d/20-igpu.conf
+Section "Device"
+    Identifier "iGPU"
+    Driver "amdgpu"
+    BusID "PCI:200:0:0"
+EndSection
+```
+
+`BusID` is **decimal**. Convert the `lspci` address: `c8:00.0` -> `PCI:200:0:0`.
+Writing `PCI:0xc8:0x0:0x0` is parsed as bus 0 and fails with "No devices detected".
+`setup/steam-install.sh` generates this file automatically.
+
+### glamor: "Refusing to try glamor on llvmpipe"
+
+The container's Mesa is too old for the iGPU (gfx1150 / Radeon 880M/890M needs
+Mesa 24.1+). Ubuntu 22.04 ships 23.2 and falls back to software rendering.
+Debian 13 (Mesa 25.0) works out of the box.
+
+### Only one container can drive the display
+
+Only one Xorg can be DRM master of `/dev/dri/card0` at a time. Stop the other
+display container first (`pct stop <id>`).
