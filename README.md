@@ -67,7 +67,10 @@ Writing `PCI:0xc8:0x0:0x0` is parsed as bus 0 and fails with "No devices detecte
 
 The container's Mesa is too old for the iGPU (gfx1150 / Radeon 880M/890M needs
 Mesa 24.1+). Ubuntu 22.04 ships 23.2 and falls back to software rendering.
-Debian 13 (Mesa 25.0) works out of the box.
+Debian 13 (Mesa 25.0) works out of the box. On Ubuntu 22.04 use the
+[kisak-mesa stable](https://launchpad.net/~kisak/+archive/ubuntu/turtle) PPA
+(`ppa:kisak/turtle`, Mesa 25.0.7). The "fresh" PPA has dropped 22.04.
+Upgrade only the Mesa/libdrm/LLVM packages (`apt-get install --only-upgrade`).
 
 ### Only one container can drive the display
 
