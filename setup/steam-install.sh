@@ -170,6 +170,8 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     xserver-xorg-input-evdev \
     xinit \
     xauth \
+    x11-xserver-utils \
+    matchbox-window-manager \
     &>/dev/null
 msg_ok "Installed Xorg"
 
@@ -311,49 +313,32 @@ mkdir -p "$GAMER_HOME"
 
 cat > "$GAMER_HOME/.xinitrc" << 'XINITRC'
 #!/usr/bin/env bash
-# .xinitrc — launched by startx on TTY7
-# Gamescope wraps Steam in Big Picture / Gamepad UI mode
-
-export DISPLAY=:0
+# .xinitrc - launched by startx on tty7.
+# Plain Xorg + Steam gamepad UI. gamescope's DRM backend does not work in LXC.
+export PATH=/usr/local/bin:/usr/games:/usr/bin:/bin:/usr/sbin:/sbin
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
-# Set DRM device for gamescope
-export DRM_DEV=/dev/dri/renderD128
+# Disable screensaver and DPMS
+xset s off
+xset s noblank
+xset -dpms
 
-# Vulkan for AMD
-export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json:/usr/share/vulkan/icd.d/radeon_icd.i686.json
-export RADV_PERFTEST=aco
+# Set black background
+xsetroot -solid black
 
-# Gamescope options:
-#   -e          = embed (borderless fullscreen)
-#   -W 1920 -H 1080 = output resolution
-#   -w 1920 -h 1080 = internal resolution
-#   --steam     = use Steam integration
-#
-# Steam options:
-#   -gamepadui  = Steam Deck UI (Big Picture replacement)
+# Output resolution (Steam uses the desktop resolution). Override with
+# STEAM_MODE=3840x2160 in /etc/environment if wanted.
+MODE="${STEAM_MODE:-1920x1080}"
+OUT=$(xrandr | awk '/ connected/{print $1; exit}')
+[ -n "$OUT" ] && xrandr --output "$OUT" --mode "$MODE" --rate 60
 
-# Detect native resolution from DRM
-NATIVE_W=1920
-NATIVE_H=1080
-if command -v xrandr &>/dev/null; then
-    RES=$(xrandr 2>/dev/null | grep ' connected' | grep -oE '[0-9]+x[0-9]+' | head -1)
-    if [ -n "$RES" ]; then
-        NATIVE_W=$(echo "$RES" | cut -dx -f1)
-        NATIVE_H=$(echo "$RES" | cut -dx -f2)
-    fi
-fi
+# Kiosk window manager: without one, the Big Picture window stays at its
+# default 1280x800 in the top-left corner.
+matchbox-window-manager -use_titlebar no -use_cursor yes &
 
-STEAM_BIN="steam"
-[ -f /usr/games/steam ] && STEAM_BIN="/usr/games/steam"
-
-# Launch gamescope with Steam
-exec gamescope \
-    -e \
-    -W ${NATIVE_W} -H ${NATIVE_H} \
-    -w ${NATIVE_W} -h ${NATIVE_H} \
-    -- ${STEAM_BIN} -gamepadui
+# Launch Steam Big Picture
+exec /usr/games/steam -gamepadui -fulldesktopres
 XINITRC
 chmod +x "$GAMER_HOME/.xinitrc"
 chown gamer:gamer "$GAMER_HOME/.xinitrc"
