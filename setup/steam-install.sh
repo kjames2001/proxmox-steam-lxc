@@ -316,6 +316,7 @@ cat > "$GAMER_HOME/.xinitrc" << 'XINITRC'
 
 export DISPLAY=:0
 export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
 
 # Set DRM device for gamescope
 export DRM_DEV=/dev/dri/renderD128
@@ -370,6 +371,17 @@ cat > "$TTY7_OVERRIDE" << 'GETTYEOF'
 ExecStart=
 ExecStart=-/sbin/agetty --autologin gamer --noclear --keep-baud tty7 115200,38400,9600 $TERM
 GETTYEOF
+
+# Keep the tty7 login out of systemd-logind. In LXC the host owns VT
+# switching, so logind never marks the session active and hands Xorg
+# *paused* input fds: the display works but keyboard/mouse are dead.
+# Skipping pam_systemd for tty7 makes Xorg open /dev/input/* directly.
+# Linger keeps the gamer user manager (and its D-Bus session bus) running.
+if ! grep -q 'pam_succeed_if.so quiet tty in tty7' /etc/pam.d/common-session; then
+    sed -i '/pam_systemd.so/i session [success=1 default=ignore] pam_succeed_if.so quiet tty in tty7:/dev/tty7' \
+        /etc/pam.d/common-session
+fi
+mkdir -p /var/lib/systemd/linger && touch /var/lib/systemd/linger/gamer
 
 # Create a profile script that auto-starts X when gamer logs in on tty7.
 # -keeptty/-novtswitch/-sharevts: LXC has no real VT ownership; without these

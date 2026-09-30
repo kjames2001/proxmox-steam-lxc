@@ -82,6 +82,14 @@ switched to `unprivileged: 0` without shifting ownership, so no setuid binary
 (Xorg.wrap, sudo, su) works. Stop the CT, back up the rootfs, loop-mount it,
 and shift every uid/gid in 100000-165535 down by 100000.
 
+### Display works but keyboard/mouse do nothing
+
+Xorg log shows `systemd-logind: got fd for /dev/input/eventN ... paused 1`.
+logind in the container never sees the session as active (the host owns VT
+switching), so it hands out paused fds. `steam-install.sh` excludes tty7 from
+`pam_systemd` and enables linger for `gamer`, so Xorg opens `/dev/input/*`
+directly. Verify with `ls -l /proc/$(pgrep -x Xorg)/fd | grep input`.
+
 ### Steam: "Timed out waiting for webhelper init", X exits after ~10s
 
 Usually Steam was launched with root's environment (`/run/user/0/bus`).
