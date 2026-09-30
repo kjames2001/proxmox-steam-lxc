@@ -73,3 +73,18 @@ Debian 13 (Mesa 25.0) works out of the box.
 
 Only one Xorg can be DRM master of `/dev/dri/card0` at a time. Stop the other
 display container first (`pct stop <id>`).
+
+### Xorg: "Cannot open virtual console 7 (Permission denied)" from autologin
+
+Check `ls -l /usr/lib/xorg/Xorg.wrap` inside the container. If it is owned by
+`100000` rather than `root`, the rootfs was created unprivileged and later
+switched to `unprivileged: 0` without shifting ownership, so no setuid binary
+(Xorg.wrap, sudo, su) works. Stop the CT, back up the rootfs, loop-mount it,
+and shift every uid/gid in 100000-165535 down by 100000.
+
+### Steam: "Timed out waiting for webhelper init", X exits after ~10s
+
+Usually Steam was launched with root's environment (`/run/user/0/bus`).
+Launch it only from the gamer's tty7 login (`.xinitrc`), not via
+`pct exec ... runuser`. Also avoid starting `steam --install` in the background
+from `.xinitrc`; the first-run bootstrap should run in the foreground.

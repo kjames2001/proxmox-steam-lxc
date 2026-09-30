@@ -371,13 +371,14 @@ ExecStart=
 ExecStart=-/sbin/agetty --autologin gamer --noclear --keep-baud tty7 115200,38400,9600 $TERM
 GETTYEOF
 
-# Create a profile script that auto-starts X when gamer logs in on tty7
-cat > "/etc/profile.d/steam-gamescope-autostart.sh" << 'PROFILEEOF'
-# Auto-start gamescope when 'gamer' logs in on tty7
-if [ "$(tty)" = "/dev/tty7" ] && [ "$(whoami)" = "gamer" ]; then
-    # Only start if X not already running
-    if ! pgrep -x Xorg &>/dev/null; then
-        exec startx -- :0 vt7
+# Create a profile script that auto-starts X when gamer logs in on tty7.
+# -keeptty/-novtswitch/-sharevts: LXC has no real VT ownership; without these
+# Xorg fails with "xf86OpenConsole: Cannot open virtual console 7".
+cat > "/etc/profile.d/steam-autostart.sh" << 'PROFILEEOF'
+# Auto-start X + Steam Big Picture when gamer logs in on tty7
+if [ "$(tty)" = "/dev/tty7" ] && [ "$(id -un)" = "gamer" ]; then
+    if ! pgrep -x Xorg >/dev/null 2>&1; then
+        exec startx -- :0 vt7 -keeptty -novtswitch -sharevts
     fi
 fi
 PROFILEEOF
